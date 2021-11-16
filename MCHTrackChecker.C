@@ -25,8 +25,8 @@ void MCHTrackChecker(const std::string trkFile = "mchtracks.root"){
     std::unique_ptr<TTree> o2SimKineTree((TTree*)o2sim_KineFileIn->Get("o2sim"));
     vector<o2::MCTrackT<float>>* mcTr = nullptr;
     o2SimKineTree->SetBranchAddress("MCTrack", &mcTr);
-    o2::dataformats::MCEventHeader* eventHeader = nullptr;
-    o2SimKineTree->SetBranchAddress("MCEventHeader.", &eventHeader);
+    //o2::dataformats::MCEventHeader* eventHeader = nullptr;
+    //o2SimKineTree->SetBranchAddress("MCEventHeader.", &eventHeader);
 
   auto iTrack = 0;
   int nPions = 0;
@@ -45,30 +45,42 @@ void MCHTrackChecker(const std::string trkFile = "mchtracks.root"){
     auto trkID = label.getTrackID();
     //Get Event id
     auto evtID = label.getEventID();
+    printf("EventID = %d : TrackID = %d \n ",evtID,trkID);
 
+    if(label.getSourceID()==0){
     o2SimKineTree->GetEntry(evtID);
     thisTrack = &(mcTr->at(trkID));
-
+    }else{
+      iTrack++;
+      continue;
+    }
     //MC track information
     auto vx_MC = thisTrack->GetStartVertexCoordinatesX();//get particle production x-posiiton
     auto vy_MC = thisTrack->GetStartVertexCoordinatesY();//get particle production y-posiiton
     auto vz_MC = thisTrack->GetStartVertexCoordinatesZ();//get particle production z-posiiton
     auto Pt_MC = thisTrack->GetPt();//get particle pt
-    auto P_MC = thisTrack->GetP();//get particle total momentum
+    auto p_MC = sqrt(pow((thisTrack->GetStartVertexMomentumX()),2.)+pow((thisTrack->GetStartVertexMomentumY()),2.)+pow( (thisTrack->GetStartVertexMomentumZ()),2.));//get particle total momentum
     auto pdgcode_MC = thisTrack->GetPdgCode();//get particle pdg code
 
-    printf("EventID = %d : TrackID = %d : vx_MC = %4f : vy_MC = %4f : vz_MC = %4f : Pt_MC = %4f : P_MC = %4f : PdgCode = %d\n ",evtID,trkID,vx_MC,vy_MC,vz_MC,Pt_MC,P_MC,pdgcode_MC);
+    printf("EventID = %d : TrackID = %d : vx_MC = %4f : vy_MC = %4f : vz_MC = %4f : Pt_MC = %4f : vP_MC = %4f : PdgCode = %d\n ",evtID,trkID,vx_MC,vy_MC,vz_MC,Pt_MC,p_MC,pdgcode_MC);
 
-    if(abs(pdgcode_MC)==211)
-      nPions++;
-    if(abs(pdgcode_MC)==13)
-      nMuons++;
-    if(abs(pdgcode_MC)==11)
-      nElectrons++;
-    if(abs(pdgcode_MC)==321)
-      nKaons++;
-    if(abs(pdgcode_MC)==2212)
-      nProtons++;
+    if(thisTrack->isPrimary()){
+      if(fabs(pdgcode_MC)==211){
+        nPions++;
+      }
+      if(fabs(pdgcode_MC)==13){
+        nMuons++;
+      }
+      if(fabs(pdgcode_MC)==11){
+        nElectrons++;
+      }
+      if(fabs(pdgcode_MC)==321){
+        nKaons++;
+      }
+      if(fabs(pdgcode_MC)==2212){
+        nProtons++;
+      }
+    }
 
     iTrack++;
   }
