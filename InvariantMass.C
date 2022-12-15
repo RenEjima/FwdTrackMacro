@@ -64,8 +64,8 @@ void InvariantMass(float chi2Cut = 5.f,
   // MC
   TFile *o2sim_KineFileIn = new TFile(o2sim_KineFile.c_str());
   TTree *o2SimKineTree = (TTree *)o2sim_KineFileIn->Get("o2sim");
-  TFile *sig_KineFileIn = new TFile(sig_KineFile.c_str());
 
+  TFile *sig_KineFileIn = new TFile(sig_KineFile.c_str());
   TTree *sigKineTree = (TTree *)sig_KineFileIn->Get("o2sim");
 
   vector<MCTrackT<float>> *mcTr = nullptr;
@@ -75,8 +75,13 @@ void InvariantMass(float chi2Cut = 5.f,
 
   vector<MCTrackT<float>> *mcTrSig = nullptr;
   sigKineTree->SetBranchAddress("MCTrack", &mcTrSig);
+  o2::dataformats::MCEventHeader *eventHeaderSig = nullptr;
+  sigKineTree->SetBranchAddress("MCEventHeader.", &eventHeaderSig);
 
   Int_t numberOfEvents = o2SimKineTree->GetEntries();
+  Int_t numberOfEventsSig = sigKineTree->GetEntries();
+
+  std::cout<<"number of bkg event = "<<numberOfEvents<<" number of sgn event = "<<numberOfEventsSig<<std::endl;
 
   // Global Muon Tracks
   TFile *trkFileIn = new TFile(trkFile.c_str());
@@ -118,29 +123,38 @@ void InvariantMass(float chi2Cut = 5.f,
   TH1F *MixedMM = new TH1F("MixedMM","Invariant Mass Spectrum (N_{--}^{Mixed});m^{#mu#mu}_{GM}[GeV/c^{2}]",Nbin,0,10);
   TH1F *MixedPM = new TH1F("MixedPM","Invariant Mass Spectrum (N_{+-}^{Mixed});m^{#mu#mu}_{GM}[GeV/c^{2}]",Nbin,0,10);
   TH1F *LikeSign = new TH1F("LikeSign","Invariant Mass Spectrum (LikeSign-method);m^{#mu#mu}_{GM}[GeV/c^{2}]",Nbin,0,10);
-  //TH1F *InvMassSpectrum_MC = new TH1F("InvMassSpectrum_MC","MC Invariant Mass Spectrum;m^{#mu#mu}_{GM}[GeV/c^{2}]",Nbin,0,10);
-  //TH1F *PDGdist = new TH1F("PDGdist","PDGcode distribution;PDG code",400000,-200000,200000);
+/*
+  TH1F *InvMassSpectrum_MC = new TH1F("InvMassSpectrum_MC","#rho MC Invariant Mass Spectrum;m^{#mu#mu}_{GM}[GeV/c^{2}]",Nbin,0,10);
+  TH1F *InvMassDD = new TH1F("InvMassDD","Invariant Mass Spectrum from D^{0};m^{#mu#mu}_{GM}[GeV/c^{2}]",Nbin,0,10);
+  TH1F *InvMassBB = new TH1F("InvMassBB","Invariant Mass Spectrum from B^{0};m^{#mu#mu}_{GM}[GeV/c^{2}]",Nbin,0,10);
+  TH1F *InvMassChargedDD = new TH1F("InvMassChargedDD","Invariant Mass Spectrum from D^{+,-};m^{#mu#mu}_{GM}[GeV/c^{2}]",Nbin,0,10);
+  TH1F *InvMassChargedBB = new TH1F("InvMassChargedBB","Invariant Mass Spectrum from B^{+,-};m^{#mu#mu}_{GM}[GeV/c^{2}]",Nbin,0,10);
+  TH1F *InvMassRho = new TH1F("InvMassRho","Invariant Mass Spectrum from #rho^{0};m^{#mu#mu}_{GM}[GeV/c^{2}]",Nbin,0,10);
+  TH1F *PtDist = new TH1F("PtDist","p_{T} distribution;p_{T}^{MC};Entry",10000,0,5);
+*/
   for (auto &gmTrack : trackGMVec)
   {
-    if (gmTrack.getMIDMatchingChi2() < 0 || gmTrack.getMFTMCHMatchingChi2() > chi2Cut) // Filter Muon Tracks and MFTMCH matching Chi2
+    /*if (gmTrack.getMIDMatchingChi2() < 0 || gmTrack.getMFTMCHMatchingChi2() > chi2Cut) // Filter Muon Tracks and MFTMCH matching Chi2
     {
       iTrack++;
       continue;
     }
     auto bestMFTTrackMatchID = gmTrack.getMFTTrackID();
     auto &mftTrackMatch = trackMFTVec[bestMFTTrackMatchID];
+    */
     MCTrackT<float> *thisTrack;
 
     const auto &label = mcLabels->at(iTrack);
 
     auto thisTrkID = label.getTrackID();
     auto thisEvtID = label.getEventID();
-    if (label.getSourceID() == 0)
+    auto thisSrcID = label.getSourceID();
+    if (thisSrcID == 0)
     {
       o2SimKineTree->GetEntry(thisEvtID);
       thisTrack = &(mcTr->at(thisTrkID));
     }
-    else if (label.getSourceID() == 1)
+    else if (thisSrcID == 1)
     {
       sigKineTree->GetEntry(thisEvtID);
       thisTrack = &(mcTrSig->at(thisTrkID));
@@ -150,28 +164,55 @@ void InvariantMass(float chi2Cut = 5.f,
       iTrack++;
       continue;
     }
+    //PtDist->Fill(gmTrack.getPt());
+    //Int_t Pdg1 = thisTrack->GetPdgCode();
+    gmTrack.propagateToZhelix(0., field_z);
+    Double_t px_1 = gmTrack.getPx();
+    Double_t py_1 = gmTrack.getPy();
+    Double_t pz_1 = gmTrack.getPz();
+    Double_t p_1 = gmTrack.getP();
+    Double_t charge_1 = gmTrack.getCharge();
+/*
+    MCTrackT<float> *thisTrack_Mother;
+    Int_t MotherTrackID_of_thisTrack = thisTrack->getMotherTrackId();
+    Int_t motherPdg, MotherTrackID_of_mother_of_thisTrack;
+    if (thisSrcID == 0){
+      thisTrack_Mother = &(mcTr->at(MotherTrackID_of_thisTrack));
+      motherPdg = thisTrack_Mother->GetPdgCode();
+      MotherTrackID_of_mother_of_thisTrack = thisTrack_Mother->getMotherTrackId();
+    }
+    if (thisSrcID == 1){
+      thisTrack_Mother = &(mcTrSig->at(MotherTrackID_of_thisTrack));
+      motherPdg = thisTrack_Mother->GetPdgCode();
+      MotherTrackID_of_mother_of_thisTrack = thisTrack_Mother->getMotherTrackId();
+    }
+*/
+
 
     auto iTrack2 = 0;
       for (auto &gmTrack2 : trackGMVec) {
-        if (gmTrack2.getMIDMatchingChi2() < 0 || gmTrack2.getMFTMCHMatchingChi2() > chi2Cut) // Filter Muon Tracks and MFTMCH matching Chi2
+        /*if (gmTrack2.getMIDMatchingChi2() < 0 || gmTrack2.getMFTMCHMatchingChi2() > chi2Cut) // Filter Muon Tracks and MFTMCH matching Chi2
         {
           iTrack2++;
           continue;
         }
         auto bestMFTTrackMatchID2 = gmTrack2.getMFTTrackID();
         auto &mftTrackMatch2 = trackMFTVec[bestMFTTrackMatchID2];
+        */
         MCTrackT<float> *thisTrack2;
 
         const auto &label2 = mcLabels->at(iTrack2);
 
         auto thisTrkID2 = label2.getTrackID();
         auto thisEvtID2 = label2.getEventID();
-        if (label2.getSourceID() == 0)
+        auto thisSrcID2 = label2.getSourceID();
+
+        if (thisSrcID2 == 0)
         {
           o2SimKineTree->GetEntry(thisEvtID2);
           thisTrack2 = &(mcTr->at(thisTrkID2));
         }
-        else if (label2.getSourceID() == 1)
+        else if (thisSrcID2 == 1)
         {
           sigKineTree->GetEntry(thisEvtID2);
           thisTrack2 = &(mcTrSig->at(thisTrkID2));
@@ -181,33 +222,30 @@ void InvariantMass(float chi2Cut = 5.f,
           iTrack2++;
           continue;
         }
-        if (label.getTrackID() >= label2.getTrackID()) { // to avoid duplication
+        if (thisTrkID >= thisTrkID2) { // to avoid duplication
           iTrack2++;
           continue;
         }
 
-        // Invariant Mass
-        gmTrack.propagateToZhelix(0., field_z);
+        //Int_t Pdg2 = thisTrack2->GetPdgCode();
+
         gmTrack2.propagateToZhelix(0., field_z);
-        Double_t px_1 = gmTrack.getPx();
-        Double_t py_1 = gmTrack.getPy();
-        Double_t pz_1 = gmTrack.getPz();
         Double_t px_2 = gmTrack2.getPx();
         Double_t py_2 = gmTrack2.getPy();
         Double_t pz_2 = gmTrack2.getPz();
-        Double_t p_1 = gmTrack.getP();
         Double_t p_2 = gmTrack2.getP();
+        Double_t charge_2 = gmTrack2.getCharge();
         Double_t CosTheta = (px_1*px_2+py_1*py_2+pz_1*pz_2)/(p_1*p_2);
         Double_t InvMass = sqrt(2.*m_mu*m_mu+2.*(sqrt(m_mu*m_mu+p_1*p_1)*sqrt(m_mu*m_mu+p_2*p_2)-p_1*p_2*CosTheta));
 
         // Mixed event
-        if (label.getEventID() != label2.getEventID()) {
+        if (thisEvtID != thisEvtID2) {
           // charge
-          if (gmTrack.getCharge() == gmTrack2.getCharge()) {
-            if (gmTrack.getCharge() == 1.) { // charge = ++
+          if (charge_1 == charge_2) {
+            if (charge_1 == 1.) { // charge = ++
               MixedPP->Fill(InvMass);
             }
-            if (gmTrack.getCharge() == -1.) { // charge = --
+            if (charge_1 == -1.) { // charge = --
               MixedMM->Fill(InvMass);
             }
             iTrack2++;
@@ -218,47 +256,123 @@ void InvariantMass(float chi2Cut = 5.f,
           continue;
         }
 
-        // Same event
-        // reconstruct mass from MC tracks assosiated with globalfwdtracks
-        /*if (thisTrack->getMotherTrackId() == thisTrack2->getMotherTrackId()) { // from the same mother
-          Double_t px_1_MC = thisTrack->GetStartVertexMomentumX();
-          Double_t py_1_MC = thisTrack->GetStartVertexMomentumY();
-          Double_t pz_1_MC = thisTrack->GetStartVertexMomentumZ();
-          Double_t px_2_MC = thisTrack2->GetStartVertexMomentumX();
-          Double_t py_2_MC = thisTrack2->GetStartVertexMomentumY();
-          Double_t pz_2_MC = thisTrack2->GetStartVertexMomentumZ();
-          Double_t p_1_MC = sqrt(px_1_MC*px_1_MC+py_1_MC*py_1_MC+pz_1_MC*pz_1_MC);
-          Double_t p_2_MC = sqrt(px_2_MC*px_2_MC+py_2_MC*py_2_MC+pz_2_MC*pz_2_MC);
-          Double_t CosTheta_MC = (px_1_MC*px_2_MC+py_1_MC*py_2_MC+pz_1_MC*pz_2_MC)/(p_1_MC*p_2_MC);
-          Double_t InvMass_MC = sqrt(2.*m_mu*m_mu+2.*(sqrt(m_mu*m_mu+p_1_MC*p_1_MC)*sqrt(m_mu*m_mu+p_2_MC*p_2_MC)-p_1_MC*p_2_MC*CosTheta_MC));
-          MCTrackT<float> *thisTrack_Mother;
-          thisTrack_Mother = &(mcTr->at(thisTrack->getMotherTrackId()));
-          Double_t PDGcode = thisTrack_Mother->GetPdgCode();
-          InvMassSpectrum_MC->Fill(InvMass_MC);
-          PDGdist->Fill(PDGcode);
-        }*/
-        // charge
-        if (gmTrack.getCharge() == gmTrack2.getCharge()) {
-          if (gmTrack.getCharge() == 1.) { // charge = ++
-            SamePP->Fill(InvMass);
-          }
-          if (gmTrack.getCharge() == -1.) { // charge = --
-            SameMM->Fill(InvMass);
-          }
-          iTrack2++;
-          continue;
-        }
-        SamePM->Fill(InvMass); // charge = +-
+        if (thisEvtID == thisEvtID2){
+          // Same event
+          // reconstruct mass from MC tracks assosiated with globalfwdtracks
 
-        //std::cout<<"1 iTrack = "<<iTrack<<" : Event ID = "<<label.getEventID()<<" : MCHtrack ID = "<<label.getTrackID()<<" : MFTtrack ID = "<<gmTrack.getMFTTrackID()<<endl;
-        //std::cout<<"2 iTrack = "<<iTrack2<<" : Event ID = "<<label2.getEventID()<<" : MCHtrack ID = "<<label2.getTrackID()<<" : MFTtrack ID = "<<gmTrack2.getMFTTrackID()<<endl;
-        //std::cout<<"CosTheta = "<<CosTheta<<" : Invariant Mass = "<<InvMass<<"GeV/c^2"<<endl;
-        //std::cout<<"-------------------------------------------------------------------------"<<endl;
+/*
+          if (thisSrcID == 0 && thisSrcID2 == 0){
+            MCTrackT<float> *thisTrack_Mother2;
+            Int_t MotherTrackID_of_thisTrack2 = thisTrack2->getMotherTrackId();
+            Int_t motherPdg2, MotherTrackID_of_mother_of_thisTrack2;
+            thisTrack_Mother2 = &(mcTr->at(MotherTrackID_of_thisTrack2));
+            thisTrack_Mother2->GetPdgCode();
+            MotherTrackID_of_mother_of_thisTrack2 = thisTrack_Mother2->getMotherTrackId();
+            std::cout<<"[bkg] thisTrack[EventID = "<<thisEvtID<<" : TrackID = "<<thisTrkID<<" : PDG = "<<Pdg1<<" : MotherID = "<<MotherTrackID_of_thisTrack<<" : MotherPDG = "<<motherPdg<<"] thisTrack2[EventID = "<<thisEvtID2<<" : TrackID = "<<thisTrkID2<<" : PDG = "<<Pdg2<<" : MotherID = "<<MotherTrackID_of_thisTrack2<<" : MotherPDG = "<<motherPdg2<<"]"<<std::endl;
+            if (MotherTrackID_of_thisTrack != MotherTrackID_of_thisTrack2) {
+              if (((motherPdg == 421) && (motherPdg2 == -421)) || ((motherPdg == -421) && (motherPdg2 == 421))) {
+                if (MotherTrackID_of_mother_of_thisTrack == MotherTrackID_of_mother_of_thisTrack2) {
+                  std::cout<<"This pair is bkg."<<std::endl;
+                  std::cout<<"Correlated DD decay."<<std::endl;
+                  InvMassDD->Fill(InvMass);
+                }
+              }
+              if (((motherPdg == 511) && (motherPdg2 == -511)) || ((motherPdg == -511) && (motherPdg2 == 511))) {
+                if (MotherTrackID_of_mother_of_thisTrack == MotherTrackID_of_mother_of_thisTrack2) {
+                  std::cout<<"This pair is bkg."<<std::endl;
+                  std::cout<<"Correlated BB decay."<<std::endl;
+                  InvMassBB->Fill(InvMass);
+                }
+              }
+              if (((motherPdg == 411) && (motherPdg2 == -411)) || ((motherPdg == -411) && (motherPdg2 == 411))) {
+                if (MotherTrackID_of_mother_of_thisTrack == MotherTrackID_of_mother_of_thisTrack2) {
+                  std::cout<<"This pair is bkg."<<std::endl;
+                  std::cout<<"Correlated charged(?) DD decay."<<std::endl;
+                  InvMassChargedDD->Fill(InvMass);
+                }
+              }
+              if (((motherPdg == 521) && (motherPdg2 == -521)) || ((motherPdg == -521) && (motherPdg2 == 521))) {
+                if (MotherTrackID_of_mother_of_thisTrack == MotherTrackID_of_mother_of_thisTrack2) {
+                  std::cout<<"This pair is bkg."<<std::endl;
+                  std::cout<<"Correlated charged(?) BB decay."<<std::endl;
+                  InvMassChargedBB->Fill(InvMass);
+                }
+              }
+            }
+            if (MotherTrackID_of_thisTrack == MotherTrackID_of_thisTrack2) { // from the same mother
+              std::cout<<"[BKG]dimuon mother's PDG code is "<<motherPdg<<std::endl;
+              if (motherPdg==113 || motherPdg==-113){
+                std::cout<<"This pair is bkg."<<std::endl;
+                std::cout<<"Rho meson decay."<<std::endl;
+                InvMassRho->Fill(InvMass);
+              }
+            }
+          }
+          if (thisSrcID == 1 && thisSrcID2 == 1){
+            MCTrackT<float> *thisTrack_Mother2;
+            Int_t MotherTrackID_of_thisTrack2 = thisTrack2->getMotherTrackId();
+            Int_t motherPdg2, MotherTrackID_of_mother_of_thisTrack2;
+            thisTrack_Mother2 = &(mcTrSig->at(MotherTrackID_of_thisTrack2));
+            thisTrack_Mother2->GetPdgCode();
+            MotherTrackID_of_mother_of_thisTrack2 = thisTrack_Mother2->getMotherTrackId();
+
+            std::cout<<"[sgn] thisTrack[EventID = "<<thisEvtID<<" : TrackID = "<<thisTrkID<<" : PDG = "<<Pdg1<<" : MotherID = "<<MotherTrackID_of_thisTrack<<" : MotherPDG = "<<motherPdg<<"] thisTrack2[EventID = "<<thisEvtID2<<" : TrackID = "<<thisTrkID2<<" : PDG = "<<Pdg2<<" : MotherID = "<<MotherTrackID_of_thisTrack2<<" : MotherPDG = "<<motherPdg2<<"]"<<std::endl;
+            if (MotherTrackID_of_thisTrack != MotherTrackID_of_thisTrack2) {
+              if (((motherPdg == 421) && (motherPdg2 == -421)) || ((motherPdg == -421) && (motherPdg2 == 421))) {
+                if (MotherTrackID_of_mother_of_thisTrack == MotherTrackID_of_mother_of_thisTrack2) {
+                  std::cout<<"This pair is sgn."<<std::endl;
+                  std::cout<<"Correlated DD decay."<<std::endl;
+                  InvMassDD->Fill(InvMass);
+                }
+              }
+              if (((motherPdg == 511) && (motherPdg2 == -511)) || ((motherPdg == -511) && (motherPdg2 == 511))) {
+                if (MotherTrackID_of_mother_of_thisTrack == MotherTrackID_of_mother_of_thisTrack2) {
+                  std::cout<<"This pair is sgn."<<std::endl;
+                  std::cout<<"Correlated BB decay."<<std::endl;
+                  InvMassBB->Fill(InvMass);
+                }
+              }
+              if (((motherPdg == 411) && (motherPdg2 == -411)) || ((motherPdg == -411) && (motherPdg2 == 411))) {
+                if (MotherTrackID_of_mother_of_thisTrack == MotherTrackID_of_mother_of_thisTrack2) {
+                  std::cout<<"This pair is sgn."<<std::endl;
+                  std::cout<<"Correlated charged(?) DD decay."<<std::endl;
+                  InvMassChargedDD->Fill(InvMass);
+                }
+              }
+              if (((motherPdg == 521) && (motherPdg2 == -521)) || ((motherPdg == -521) && (motherPdg2 == 521))) {
+                if (MotherTrackID_of_mother_of_thisTrack == MotherTrackID_of_mother_of_thisTrack2) {
+                  std::cout<<"This pair is sgn."<<std::endl;
+                  std::cout<<"Correlated charged(?) BB decay."<<std::endl;
+                  InvMassChargedBB->Fill(InvMass);
+                }
+              }
+            }
+            if (MotherTrackID_of_thisTrack == MotherTrackID_of_thisTrack2) { // from the same mother
+              if (motherPdg==113 || motherPdg==-113){
+                std::cout<<"This pair is sgn."<<std::endl;
+                std::cout<<"Rho meson decay."<<std::endl;
+                InvMassRho->Fill(InvMass);
+              }
+            }
+          }
+*/
+          //}
+          // charge
+          if (charge_1 == charge_2) {
+            if (charge_1 == 1.) { // charge = ++
+              SamePP->Fill(InvMass);
+            }
+            if (charge_1 == -1.) { // charge = --
+              SameMM->Fill(InvMass);
+            }
+            iTrack2++;
+            continue;
+          }
+          SamePM->Fill(InvMass); // charge = +-
+        }
         iTrack2++;
       } // Loop on GMtracks2
-
     iTrack++;
-
   } // Loop on GMTracks
 
   // LikeSign-method
@@ -275,13 +389,10 @@ void InvariantMass(float chi2Cut = 5.f,
     }
     Double_t Rfactor = NmixedPM/(2.*sqrt(NmixedPP*NmixedMM));
     Double_t Nsignal = NsamePM-2.*Rfactor*sqrt(NsamePP*NsameMM);
-    //std::cout<<"bin = "<<bin<<endl;
-    //std::cout<<"Same PP = "<<NsamePP<<" : MM = "<<NsameMM<<" : PM = "<<NsamePM<<" : Mixed PP = "<<NmixedPP<<" : MM = "<<NmixedMM<<" : PM = "<<NmixedPM<<endl;
-    //std::cout<<"Rfactor = "<<Rfactor<<" : Nsignal = "<<Nsignal<<endl;
-    //std::cout<<"-------------------------------------------------------------------------"<<endl;
     LikeSign->SetBinContent(bin,Nsignal);
   }
 
+  //PtDist->Write();
   SamePM->Write();
   SamePP->Write();
   SameMM->Write();
@@ -290,6 +401,13 @@ void InvariantMass(float chi2Cut = 5.f,
   MixedMM->Write();
   LikeSign->Write();
   //InvMassSpectrum_MC->Write();
+/*
+  InvMassDD->Write();
+  InvMassBB->Write();
+  InvMassChargedDD->Write();
+  InvMassChargedBB->Write();
+  InvMassRho->Write();
+*/
   //PDGdist->Write();
   outFile.Close();
 
